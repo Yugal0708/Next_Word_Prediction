@@ -1,394 +1,465 @@
 import streamlit as st
 import numpy as np
 import pickle
-import tf_keras as keras
-from tf_keras.models import load_model
-from tf_keras.preprocessing.sequence import pad_sequences
 import os
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # ─── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Next Word Predictor",
-    page_icon="🔮",
+    page_title="NeuroPredict · Next Word AI",
+    page_icon="🧠",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-# ─── Custom CSS ────────────────────────────────────────────────────────────────
+# ─── MEGA CSS ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,700;1,300&family=Rajdhani:wght@300;400;600;700&display=swap');
 
-  /* ── Root Variables ── */
-  :root {
-    --bg:        #0a0a0f;
-    --surface:   #111118;
-    --border:    #1e1e2e;
-    --accent:    #7c3aed;
-    --accent2:   #06b6d4;
-    --text:      #e2e8f0;
-    --muted:     #64748b;
-    --glow:      rgba(124, 58, 237, 0.35);
-  }
+:root {
+  --bg0:     #03030a;
+  --bg1:     #07071a;
+  --bg2:     #0d0d28;
+  --panel:   #0a0a20;
+  --border:  #1a1a40;
+  --cyan:    #00e5ff;
+  --magenta: #ff2d78;
+  --text:    #e8e8ff;
+  --muted:   #4a4a7a;
+  --glow-c:  rgba(0,229,255,0.18);
+  --glow-m:  rgba(255,45,120,0.18);
+}
 
-  /* ── Global Reset ── */
-  html, body, [class*="css"] {
-    font-family: 'Syne', sans-serif;
-    background-color: var(--bg) !important;
-    color: var(--text) !important;
-  }
+html, body, [class*="css"], .stApp {
+  font-family: 'Rajdhani', sans-serif !important;
+  background: var(--bg0) !important;
+  color: var(--text) !important;
+}
 
-  /* ── Hide Streamlit chrome ── */
-  #MainMenu, footer, header { visibility: hidden; }
-  .block-container { padding-top: 2.5rem !important; max-width: 780px; }
+.stApp {
+  background-image:
+    linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px) !important;
+  background-size: 44px 44px !important;
+}
 
-  /* ── Noise texture overlay ── */
-  body::before {
-    content: "";
-    position: fixed; inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none; z-index: 0; opacity: 0.4;
-  }
+#MainMenu, footer, header { visibility: hidden; }
+.block-container { padding-top: 1.5rem !important; max-width: 820px !important; }
 
-  /* ── Hero heading ── */
-  .hero-title {
-    font-size: clamp(2rem, 5vw, 3.2rem);
-    font-weight: 800;
-    line-height: 1.1;
-    background: linear-gradient(135deg, #a78bfa 0%, #38bdf8 60%, #7c3aed 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 0.25rem;
-    letter-spacing: -0.02em;
-  }
-  .hero-sub {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.78rem;
-    color: var(--muted);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 2.5rem;
-  }
+/* ── Keyframes ── */
+@keyframes fadeUp    { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+@keyframes chipPop   { 0%{transform:scale(0.75);opacity:0} 70%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
+@keyframes blink     { 0%,100%{opacity:1} 50%{opacity:0} }
+@keyframes scanH     { 0%{top:-2px} 100%{top:100%} }
+@keyframes glowPulse { 0%,100%{box-shadow:0 0 15px var(--glow-c)} 50%{box-shadow:0 0 35px var(--glow-c),0 0 60px rgba(0,229,255,0.08)} }
 
-  /* ── Card container ── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 2rem;
-    position: relative;
-    overflow: hidden;
-  }
-  .card::before {
-    content: "";
-    position: absolute;
-    top: -60px; left: -60px;
-    width: 200px; height: 200px;
-    background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
-    pointer-events: none;
-  }
+/* ── Hero ── */
+.hero-wrap { text-align:center; padding:2rem 0 1.2rem; animation:fadeUp 0.8s ease both; }
+.hero-eyebrow {
+  font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+  letter-spacing:0.3em; text-transform:uppercase; color:var(--cyan);
+  margin-bottom:0.6rem; opacity:0.75;
+}
+.hero-eyebrow em { color:var(--magenta); font-style:normal; }
+.hero-title {
+  font-family:'Orbitron',monospace; font-weight:900;
+  font-size:clamp(2.2rem,5.5vw,3.8rem); line-height:1;
+  background:linear-gradient(135deg,#00e5ff 0%,#ffffff 45%,#ff2d78 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  letter-spacing:-0.01em; margin-bottom:0.4rem;
+}
+.hero-sub {
+  font-family:'JetBrains Mono',monospace; font-size:0.68rem;
+  color:var(--muted); letter-spacing:0.18em; text-transform:uppercase;
+}
+.hero-sub .d { color:var(--cyan); margin:0 0.5rem; }
+.hero-rule {
+  display:flex; align-items:center; justify-content:center; gap:0.7rem; margin:1.1rem 0 2rem;
+}
+.hr-bar  { height:1px; width:72px; }
+.hr-bar.l{ background:linear-gradient(90deg,transparent,var(--cyan)); }
+.hr-bar.r{ background:linear-gradient(90deg,var(--cyan),transparent); }
+.hr-gem  { width:7px;height:7px;background:var(--cyan);transform:rotate(45deg);
+           box-shadow:0 0 10px var(--cyan),0 0 22px var(--cyan); }
 
-  /* ── Text input override ── */
-  .stTextInput > div > div > input {
-    background: #0d0d14 !important;
-    border: 1.5px solid var(--border) !important;
-    border-radius: 10px !important;
-    color: var(--text) !important;
-    font-family: 'Space Mono', monospace !important;
-    font-size: 1.05rem !important;
-    padding: 0.75rem 1rem !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
-  }
-  .stTextInput > div > div > input:focus {
-    border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px var(--glow) !important;
-    outline: none !important;
-  }
-  .stTextInput label {
-    font-family: 'Space Mono', monospace !important;
-    font-size: 0.72rem !important;
-    color: var(--muted) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
+/* ── Stats row ── */
+.stats-row {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem;
+  margin-bottom:1.75rem; animation:fadeUp 0.85s ease 0.1s both;
+}
+.stat-card {
+  background:var(--bg1); border:1px solid rgba(0,229,255,0.1);
+  border-radius:10px; padding:0.85rem 1rem; text-align:center;
+}
+.stat-val {
+  font-family:'Orbitron',monospace; font-size:1.35rem; font-weight:700;
+  color:var(--cyan); line-height:1; text-shadow:0 0 14px var(--glow-c);
+}
+.stat-lbl {
+  font-family:'JetBrains Mono',monospace; font-size:0.52rem;
+  text-transform:uppercase; letter-spacing:0.15em; color:var(--muted); margin-top:0.3rem;
+}
 
-  /* ── Slider override ── */
-  .stSlider label {
-    font-family: 'Space Mono', monospace !important;
-    font-size: 0.72rem !important;
-    color: var(--muted) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
-  .stSlider > div > div > div > div {
-    background: var(--accent) !important;
-  }
+/* ── Panel ── */
+.neo-panel {
+  background:var(--panel); border:1px solid rgba(0,229,255,0.13);
+  border-radius:16px; padding:1.75rem 2rem; position:relative;
+  overflow:hidden; animation:fadeUp 0.9s ease 0.15s both;
+}
+.neo-panel::before {
+  content:""; position:absolute; top:0;left:0;right:0; height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+}
+.neo-panel::after {
+  content:""; position:absolute; top:-80px;right:-80px;
+  width:250px;height:250px;
+  background:radial-gradient(circle,rgba(0,229,255,0.04) 0%,transparent 70%);
+  pointer-events:none;
+}
+/* corner brackets */
+.c { position:absolute; width:14px; height:14px; pointer-events:none; }
+.c.tl { top:8px;left:8px;   border-top:2px solid var(--cyan);border-left:2px solid var(--cyan); }
+.c.tr { top:8px;right:8px;  border-top:2px solid var(--cyan);border-right:2px solid var(--cyan); }
+.c.bl { bottom:8px;left:8px; border-bottom:2px solid var(--cyan);border-left:2px solid var(--cyan); }
+.c.br { bottom:8px;right:8px;border-bottom:2px solid var(--cyan);border-right:2px solid var(--cyan); }
+.c.m  { border-color:var(--magenta)!important; }
 
-  /* ── Button ── */
-  .stButton > button {
-    background: linear-gradient(135deg, var(--accent), #4f46e5) !important;
-    border: none !important;
-    border-radius: 10px !important;
-    color: white !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 1rem !important;
-    padding: 0.65rem 2rem !important;
-    width: 100% !important;
-    transition: transform 0.15s, box-shadow 0.15s !important;
-    letter-spacing: 0.03em;
-  }
-  .stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 24px var(--glow) !important;
-  }
-  .stButton > button:active {
-    transform: translateY(0px) !important;
-  }
+/* ── Section label ── */
+.slbl {
+  font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+  text-transform:uppercase; letter-spacing:0.2em; color:var(--cyan);
+  margin-bottom:0.7rem; display:flex; align-items:center; gap:0.55rem;
+}
+.slbl::before { content:"▶"; font-size:0.48rem; color:var(--magenta); }
+.slbl .tag {
+  background:rgba(0,229,255,0.07); border:1px solid rgba(0,229,255,0.18);
+  border-radius:4px; padding:1px 6px; font-size:0.5rem; color:var(--cyan); margin-left:auto;
+}
+.slbl.m  { color:var(--magenta); }
+.slbl.m .tag { background:rgba(255,45,120,0.07);border-color:rgba(255,45,120,0.2);color:var(--magenta); }
 
-  /* ── Prediction chips ── */
-  .pred-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: 1.2rem;
-  }
-  .pred-chip {
-    background: linear-gradient(135deg, #1e1b4b, #1a1a2e);
-    border: 1.5px solid #312e81;
-    border-radius: 8px;
-    padding: 0.5rem 1.1rem;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.9rem;
-    color: #a5b4fc;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .pred-chip:hover {
-    border-color: var(--accent);
-    color: white;
-    background: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px var(--glow);
-  }
-  .pred-rank {
-    font-size: 0.6rem;
-    color: var(--muted);
-    margin-right: 0.4rem;
-    vertical-align: super;
-  }
+/* ── Input ── */
+.stTextInput > div > div > input {
+  background:#050510!important; border:1.5px solid rgba(0,229,255,0.18)!important;
+  border-radius:10px!important; color:var(--cyan)!important;
+  font-family:'JetBrains Mono',monospace!important; font-size:0.98rem!important;
+  padding:0.78rem 1rem!important; letter-spacing:0.04em!important;
+  transition:all 0.2s!important; caret-color:var(--magenta)!important;
+}
+.stTextInput > div > div > input::placeholder { color:var(--muted)!important; font-style:italic; }
+.stTextInput > div > div > input:focus {
+  border-color:var(--cyan)!important;
+  box-shadow:0 0 0 2px rgba(0,229,255,0.1),0 0 18px rgba(0,229,255,0.08)!important;
+}
+.stTextInput label {
+  font-family:'JetBrains Mono',monospace!important; font-size:0.6rem!important;
+  color:var(--muted)!important; text-transform:uppercase; letter-spacing:0.15em!important;
+}
 
-  /* ── Sentence output ── */
-  .sentence-box {
-    background: #0d0d14;
-    border: 1.5px solid var(--border);
-    border-left: 4px solid var(--accent);
-    border-radius: 10px;
-    padding: 1rem 1.25rem;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.95rem;
-    color: var(--text);
-    margin-top: 1.2rem;
-    line-height: 1.7;
-    word-break: break-word;
-  }
-  .sentence-box .highlight {
-    color: #a78bfa;
-    font-weight: 700;
-  }
+/* ── Slider ── */
+.stSlider label {
+  font-family:'JetBrains Mono',monospace!important; font-size:0.6rem!important;
+  color:var(--muted)!important; text-transform:uppercase; letter-spacing:0.15em!important;
+}
+div[data-baseweb="slider"] > div > div > div {
+  background:linear-gradient(90deg,var(--cyan),var(--magenta))!important; height:3px!important;
+}
+div[data-baseweb="slider"] [role="slider"] {
+  background:var(--cyan)!important; border:2px solid var(--bg0)!important;
+  box-shadow:0 0 10px var(--cyan)!important; width:15px!important; height:15px!important;
+}
 
-  /* ── Section label ── */
-  .section-label {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--muted);
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .section-label::before {
-    content: "";
-    display: inline-block;
-    width: 16px; height: 2px;
-    background: var(--accent);
-    border-radius: 1px;
-  }
+/* ── Button ── */
+.stButton > button {
+  background:transparent!important; border:1.5px solid var(--cyan)!important;
+  border-radius:10px!important; color:var(--cyan)!important;
+  font-family:'Orbitron',monospace!important; font-weight:700!important;
+  font-size:0.72rem!important; padding:0.65rem 1.4rem!important;
+  width:100%!important; letter-spacing:0.18em!important; text-transform:uppercase!important;
+  transition:all 0.22s!important;
+}
+.stButton > button:hover {
+  background:var(--cyan)!important; color:#03030a!important;
+  box-shadow:0 0 20px var(--glow-c),0 0 40px var(--glow-c)!important;
+  transform:translateY(-2px)!important;
+}
+.stButton > button:active { transform:translateY(0)!important; }
 
-  /* ── Divider ── */
-  hr { border-color: var(--border) !important; margin: 1.6rem 0 !important; }
+/* ── Prob bars ── */
+.prob-row {
+  display:flex; align-items:center; gap:0.65rem;
+  margin-bottom:0.42rem; animation:fadeUp 0.4s ease both;
+}
+.prob-word {
+  font-family:'JetBrains Mono',monospace; font-size:0.78rem;
+  color:var(--cyan); width:110px; flex-shrink:0;
+}
+.prob-bar-bg {
+  flex:1; height:5px; background:rgba(255,255,255,0.05);
+  border-radius:3px; overflow:hidden;
+}
+.prob-bar-fg {
+  height:100%; border-radius:3px;
+  background:linear-gradient(90deg,var(--cyan),var(--magenta));
+  box-shadow:0 0 7px var(--glow-c);
+}
+.prob-pct {
+  font-family:'JetBrains Mono',monospace; font-size:0.65rem;
+  color:var(--muted); width:40px; text-align:right;
+}
 
-  /* ── Footer ── */
-  .footer-tag {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    color: var(--muted);
-    text-align: center;
-    margin-top: 2.5rem;
-    letter-spacing: 0.08em;
-  }
-  .footer-tag a { color: #7c3aed; text-decoration: none; }
-  .footer-tag a:hover { text-decoration: underline; }
+/* ── Sentence box ── */
+.sbox {
+  background:#04040e; border:1px solid rgba(0,229,255,0.1);
+  border-left:3px solid var(--cyan); border-radius:10px;
+  padding:1rem 1.25rem; font-family:'JetBrains Mono',monospace;
+  font-size:0.96rem; line-height:1.85; word-break:break-word;
+  position:relative; margin:0.8rem 0; animation:fadeUp 0.4s ease both;
+}
+.sbox::before {
+  content:"OUTPUT"; position:absolute; top:-8px; left:14px;
+  background:var(--bg0); padding:0 6px;
+  font-family:'JetBrains Mono',monospace; font-size:0.47rem;
+  letter-spacing:0.2em; color:var(--cyan);
+}
+.sbox .seed  { color:#4a4a7a; }
+.sbox .added { color:var(--cyan); font-weight:700; }
+.sbox .cursor {
+  display:inline-block; width:2px; height:1em;
+  background:var(--magenta); vertical-align:text-bottom;
+  margin-left:2px; animation:blink 1s step-end infinite;
+}
+
+/* ── Auto panel ── */
+.auto-panel {
+  background:linear-gradient(135deg,#080818,#0a0520);
+  border:1px solid rgba(255,45,120,0.14); border-radius:16px;
+  padding:1.75rem 2rem; position:relative; overflow:hidden;
+  margin-top:1.5rem; animation:fadeUp 0.9s ease 0.25s both;
+}
+.auto-panel::before {
+  content:""; position:absolute; top:0;left:0;right:0; height:1px;
+  background:linear-gradient(90deg,transparent,var(--magenta),transparent);
+}
+
+/* ── Error ── */
+.err-box {
+  background:rgba(255,45,120,0.06); border:1px solid rgba(255,45,120,0.28);
+  border-left:3px solid var(--magenta); border-radius:10px;
+  padding:1rem 1.25rem; font-family:'JetBrains Mono',monospace;
+  font-size:0.78rem; color:#ff8ab0; line-height:1.7;
+}
+.err-box strong { color:var(--magenta); }
+
+/* ── Footer ── */
+.neo-footer {
+  text-align:center; padding:2rem 0 1rem;
+  animation:fadeUp 1s ease 0.35s both;
+}
+.footer-inner {
+  display:inline-flex; align-items:center; gap:0.55rem;
+  font-family:'JetBrains Mono',monospace; font-size:0.58rem;
+  color:var(--muted); letter-spacing:0.1em; text-transform:uppercase;
+}
+.footer-inner .sep { color:var(--cyan); }
+.footer-inner a { color:var(--cyan); text-decoration:none; }
+.footer-inner a:hover { text-shadow:0 0 8px var(--cyan); }
+
+/* stagger delays */
+.prob-row:nth-child(1){animation-delay:.04s}
+.prob-row:nth-child(2){animation-delay:.10s}
+.prob-row:nth-child(3){animation-delay:.16s}
+.prob-row:nth-child(4){animation-delay:.22s}
+.prob-row:nth-child(5){animation-delay:.28s}
+.prob-row:nth-child(6){animation-delay:.34s}
+.prob-row:nth-child(7){animation-delay:.40s}
+.prob-row:nth-child(8){animation-delay:.46s}
 </style>
 """, unsafe_allow_html=True)
 
 
-# ─── Load Model & Artifacts ────────────────────────────────────────────────────
-import os
-
+# ─── Load artifacts ────────────────────────────────────────────────────────────
 @st.cache_resource
 def load_artifacts():
-    base = os.path.dirname(os.path.abspath(__file__))
+    base      = os.path.dirname(os.path.abspath(__file__))
     model     = load_model(os.path.join(base, "lstm_model.h5"))
     tokenizer = pickle.load(open(os.path.join(base, "tokenizer.pkl"), "rb"))
     max_len   = pickle.load(open(os.path.join(base, "max_len.pkl"),   "rb"))
     return model, tokenizer, max_len
+
 try:
     model, tokenizer, max_len = load_artifacts()
     model_loaded = True
+    vocab_size   = len(tokenizer.word_index) + 1
 except Exception as e:
     model_loaded = False
     load_error   = str(e)
+    vocab_size   = 0
 
 
-# ─── Prediction Logic ──────────────────────────────────────────────────────────
+# ─── Prediction ────────────────────────────────────────────────────────────────
 def predict_next_words(text: str, n: int = 5):
-    """Return top-n predicted next words with their probabilities."""
-    token_seq = tokenizer.texts_to_sequences([text])[0]
-    padded    = pad_sequences([token_seq], maxlen=max_len - 1, padding="pre")
-    preds     = model.predict(padded, verbose=0)[0]
-
-    # Get top-n indices
+    token_seq   = tokenizer.texts_to_sequences([text])[0]
+    padded      = pad_sequences([token_seq], maxlen=max_len - 1, padding="pre")
+    preds       = model.predict(padded, verbose=0)[0]
     top_n_idx   = np.argsort(preds)[-n:][::-1]
-    word_index  = tokenizer.word_index
-    idx_to_word = {v: k for k, v in word_index.items()}
-
-    results = []
-    for idx in top_n_idx:
-        word = idx_to_word.get(idx, None)
-        if word:
-            results.append((word, float(preds[idx])))
-    return results
+    idx2word    = {v: k for k, v in tokenizer.word_index.items()}
+    return [(idx2word[i], float(preds[i])) for i in top_n_idx if i in idx2word]
 
 
-# ─── UI ────────────────────────────────────────────────────────────────────────
-st.markdown('<div class="hero-title">🔮 Next Word Predictor</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-sub">LSTM · Deep Learning · NLP</div>', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════
+# HERO
+# ══════════════════════════════════════════════════════════
+st.markdown("""
+<div class="hero-wrap">
+  <div class="hero-eyebrow">[ NEURAL LANGUAGE MODEL <em>// LSTM ARCHITECTURE</em> ]</div>
+  <div class="hero-title">NEUROPREDICT</div>
+  <div class="hero-sub">Next Word AI <span class="d">◆</span> Deep Learning <span class="d">◆</span> NLP</div>
+  <div class="hero-rule">
+    <div class="hr-bar l"></div>
+    <div class="hr-gem"></div>
+    <div class="hr-bar r"></div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 if not model_loaded:
-    st.error(f"**Model load failed:** {load_error}\n\nMake sure `lstm_model.h5`, `tokenizer.pkl`, and `max_len.pkl` are in the same directory as `app.py`.")
+    st.markdown(f'<div class="err-box"><strong>⚠ SYSTEM ERROR :</strong> {load_error}<br><br>Place <code>lstm_model.h5</code>, <code>tokenizer.pkl</code>, <code>max_len.pkl</code> in the same folder as <code>app.py</code>.</div>', unsafe_allow_html=True)
     st.stop()
 
-# ── Session state ──────────────────────────────────────────────────────────────
-if "input_text"        not in st.session_state: st.session_state.input_text        = ""
-if "predictions"       not in st.session_state: st.session_state.predictions       = []
-if "auto_sentence"     not in st.session_state: st.session_state.auto_sentence     = ""
-if "auto_sentence_raw" not in st.session_state: st.session_state.auto_sentence_raw = ""
+# Stats
+st.markdown(f"""
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-val">{vocab_size:,}</div><div class="stat-lbl">Vocabulary</div></div>
+  <div class="stat-card"><div class="stat-val">{max_len}</div><div class="stat-lbl">Max Seq Len</div></div>
+  <div class="stat-card"><div class="stat-val">LSTM</div><div class="stat-lbl">Architecture</div></div>
+</div>
+""", unsafe_allow_html=True)
 
-# ── Controls ───────────────────────────────────────────────────────────────────
-col1, col2 = st.columns([3, 1])
-with col1:
-    user_input = st.text_input(
-        "Seed text",
-        value=st.session_state.input_text,
-        placeholder="Type a sentence...",
-        key="input_widget",
-    )
-with col2:
-    top_n = st.slider("Top N", min_value=1, max_value=10, value=5, key="topn")
+# ── Session State ──────────────────────────────────────────────────────────────
+for k, v in [("input_text",""),("predictions",[]),("sentence",""),("seed_len",0),("run",0)]:
+    if k not in st.session_state: st.session_state[k] = v
 
-predict_clicked = st.button("⚡ Predict Next Word")
 
-# ── Prediction ─────────────────────────────────────────────────────────────────
-if predict_clicked and user_input.strip():
-    preds = predict_next_words(user_input.strip(), n=top_n)
-    st.session_state.predictions       = preds
-    st.session_state.input_text        = user_input.strip()
-    st.session_state.auto_sentence     = user_input.strip()
-    st.session_state.auto_sentence_raw = user_input.strip()
+# ══════════════════════════════════════════════════════════
+# PREDICT PANEL
+# ══════════════════════════════════════════════════════════
+st.markdown('<div class="neo-panel"><div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div>', unsafe_allow_html=True)
+st.markdown('<div class="slbl">Input Sequence <span class="tag">ENCODE</span></div>', unsafe_allow_html=True)
 
-# ── Chip click handler via query param trick ───────────────────────────────────
-# We'll render chips as buttons inside columns
+ci, cn = st.columns([4, 1])
+with ci:
+    user_input = st.text_input("seed", value=st.session_state.input_text,
+                               placeholder="Enter seed text…", label_visibility="collapsed")
+with cn:
+    top_n = st.slider("N", 1, 10, 5, label_visibility="collapsed")
+
+st.caption(f"🎛 Top-**{top_n}** predictions")
+
+if st.button("⚡  RUN PREDICTION"):
+    if user_input.strip():
+        preds = predict_next_words(user_input.strip(), n=top_n)
+        st.session_state.update(predictions=preds, input_text=user_input.strip(),
+                                sentence=user_input.strip(),
+                                seed_len=len(user_input.strip().split()), run=st.session_state.run+1)
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════
+# RESULTS
+# ══════════════════════════════════════════════════════════
 if st.session_state.predictions:
-    st.markdown('<div class="section-label">Predicted Words</div>', unsafe_allow_html=True)
+    preds    = st.session_state.predictions
+    max_prob = preds[0][1] if preds else 1
 
-    chips = st.session_state.predictions
-    cols  = st.columns(len(chips))
-    for i, (word, prob) in enumerate(chips):
+    # Probability bars
+    st.markdown('<div class="slbl" style="margin-top:1.5rem">Probability Distribution <span class="tag">SOFTMAX</span></div>', unsafe_allow_html=True)
+    bars = "".join(f"""
+      <div class="prob-row">
+        <div class="prob-word">{w}</div>
+        <div class="prob-bar-bg"><div class="prob-bar-fg" style="width:{int(p/max_prob*100)}%"></div></div>
+        <div class="prob-pct">{p*100:.1f}%</div>
+      </div>""" for w, p in preds)
+    st.markdown(bars, unsafe_allow_html=True)
+
+    # Clickable word buttons
+    st.markdown('<div class="slbl" style="margin-top:1.2rem">Select Next Word <span class="tag">INTERACTIVE</span></div>', unsafe_allow_html=True)
+    cols = st.columns(len(preds))
+    for i, (word, prob) in enumerate(preds):
         with cols[i]:
-            if st.button(f"{word}\n{prob*100:.1f}%", key=f"chip_{i}"):
-                st.session_state.auto_sentence     += f" {word}"
-                st.session_state.auto_sentence_raw += f" {word}"
-                new_preds = predict_next_words(st.session_state.auto_sentence, n=top_n)
-                st.session_state.predictions = new_preds
+            if st.button(f"{word}\n{prob*100:.0f}%", key=f"w_{i}_{st.session_state.run}"):
+                st.session_state.sentence += f" {word}"
+                st.session_state.predictions = predict_next_words(st.session_state.sentence, n=top_n)
+                st.session_state.run += 1
                 st.rerun()
 
-    st.markdown("---")
+    # Sentence display
+    if st.session_state.sentence:
+        words  = st.session_state.sentence.split()
+        seed_p = " ".join(words[:st.session_state.seed_len])
+        add_p  = " ".join(words[st.session_state.seed_len:])
+        added_html = f'<span class="added"> {add_p}</span>' if add_p else ""
+        st.markdown(f'<div class="sbox"><span class="seed">{seed_p}</span>{added_html}<span class="cursor"></span></div>', unsafe_allow_html=True)
 
-    # ── Sentence so far ──────────────────────────────────────────────────────
-    if st.session_state.auto_sentence:
-        seed_len   = len(st.session_state.input_text.split())
-        words      = st.session_state.auto_sentence.split()
-        seed_part  = " ".join(words[:seed_len])
-        added_part = " ".join(words[seed_len:])
-
-        display_html = f'<div class="sentence-box">'
-        display_html += f'<span style="color:#94a3b8">{seed_part}</span>'
-        if added_part:
-            display_html += f' <span class="highlight">{added_part}</span>'
-        display_html += "</div>"
-
-        st.markdown('<div class="section-label">Built Sentence</div>', unsafe_allow_html=True)
-        st.markdown(display_html, unsafe_allow_html=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("🔄 Reset Sentence"):
-                st.session_state.auto_sentence     = st.session_state.input_text
-                st.session_state.auto_sentence_raw = st.session_state.input_text
-                st.session_state.predictions       = predict_next_words(st.session_state.input_text, n=top_n)
+        r1, r2, r3 = st.columns(3)
+        with r1:
+            if st.button("↺  RESET"):
+                st.session_state.update(sentence=st.session_state.input_text,
+                                        predictions=predict_next_words(st.session_state.input_text, top_n),
+                                        run=st.session_state.run+1)
                 st.rerun()
-        with c2:
-            if st.button("📋 Copy to Input"):
-                st.session_state.input_text = st.session_state.auto_sentence
+        with r2:
+            if st.button("⊕  USE AS SEED"):
+                st.session_state.update(input_text=st.session_state.sentence,
+                                        seed_len=len(words))
                 st.rerun()
+        with r3:
+            wc = len(words) - st.session_state.seed_len
+            st.markdown(f'<div style="text-align:center;font-family:JetBrains Mono,monospace;font-size:0.62rem;color:#4a4a7a;padding-top:0.72rem">+{wc} WORD{"S" if wc!=1 else ""} ADDED</div>', unsafe_allow_html=True)
 
-# ── Auto-Complete Mode ─────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown('<div class="section-label">Auto-Complete Mode</div>', unsafe_allow_html=True)
 
-auto_col1, auto_col2 = st.columns([3, 1])
-with auto_col1:
-    auto_seed  = st.text_input("Seed for auto-complete", placeholder="e.g. The quick brown", key="auto_seed")
-with auto_col2:
-    auto_words = st.slider("Words to generate", 1, 30, 10, key="auto_len")
+# ══════════════════════════════════════════════════════════
+# AUTO-COMPLETE
+# ══════════════════════════════════════════════════════════
+st.markdown('<div class="auto-panel"><div class="c tl m"></div><div class="c tr m"></div><div class="c bl m"></div><div class="c br m"></div>', unsafe_allow_html=True)
+st.markdown('<div class="slbl m">Auto-Complete Engine <span class="tag">GENERATIVE</span></div>', unsafe_allow_html=True)
 
-if st.button("✨ Auto-Complete Sentence"):
+a1, a2 = st.columns([3, 1])
+with a1:
+    auto_seed = st.text_input("ac", placeholder="Type a seed phrase…", label_visibility="collapsed", key="aseed")
+with a2:
+    auto_n = st.slider("W", 3, 40, 12, label_visibility="collapsed", key="an")
+
+st.caption(f"🔁 Generating **{auto_n}** words")
+
+if st.button("✦  AUTO-COMPLETE", key="acbtn"):
     if auto_seed.strip():
-        generated = auto_seed.strip()
-        for _ in range(auto_words):
-            p = predict_next_words(generated, n=1)
-            if p:
-                generated += f" {p[0][0]}"
-        # Display
-        original_words = len(auto_seed.strip().split())
-        gen_words      = generated.split()
-        seed_disp      = " ".join(gen_words[:original_words])
-        added_disp     = " ".join(gen_words[original_words:])
-        st.markdown(
-            f'<div class="sentence-box">'
-            f'<span style="color:#94a3b8">{seed_disp}</span>'
-            f' <span class="highlight">{added_disp}</span>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        with st.spinner("Generating…"):
+            gen = auto_seed.strip()
+            for _ in range(auto_n):
+                p = predict_next_words(gen, n=1)
+                if p: gen += f" {p[0][0]}"
+            ow    = len(auto_seed.strip().split())
+            gw    = gen.split()
+            sd    = " ".join(gw[:ow])
+            ad    = " ".join(gw[ow:])
+        st.markdown(f'<div class="sbox" style="border-left-color:var(--magenta)"><span style="position:absolute;top:-8px;left:14px;background:var(--bg0);padding:0 6px;font-family:JetBrains Mono,monospace;font-size:0.47rem;letter-spacing:0.2em;color:var(--magenta)">AUTO-OUTPUT</span><span class="seed">{sd}</span> <span class="added" style="color:var(--magenta)">{ad}</span></div>', unsafe_allow_html=True)
 
-# ── Footer ─────────────────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown(
-    '<div class="footer-tag">Built with 🔮 by <a href="https://github.com/Yugal0708" target="_blank">Yugal</a> · LSTM Next Word Prediction · Streamlit + TensorFlow</div>',
-    unsafe_allow_html=True,
-)
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════
+# FOOTER
+# ══════════════════════════════════════════════════════════
+st.markdown("""
+<div class="neo-footer">
+  <div class="footer-inner">
+    <span>NeuroPredict</span><span class="sep">◆</span>
+    <span>LSTM · TensorFlow · Streamlit</span><span class="sep">◆</span>
+    <a href="https://github.com/Yugal0708" target="_blank">@Yugal0708</a><span class="sep">◆</span>
+    <span>Nagpur, IN</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
