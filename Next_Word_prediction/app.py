@@ -19,48 +19,39 @@ padding: 10px 20px; margin: 6px; border-radius: 25px; font-weight: 600; cursor: 
 
 # ====================== LOAD MODEL ======================
 @st.cache_resource
-def load_model_and_files():
+def download_and_load_model():
+    model_filename = "lstm_model.h5"
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(current_dir, "lstm_model.h5")
-    
+    model_path = os.path.join(current_dir, model_filename)
+
+    model_url = "https://raw.githubusercontent.com/Yugal0708/Next_Word_Prediction/refs/heads/main/Next_Word_prediction/lstm_model.h5"
+
+    if not os.path.exists(model_path):
+        st.info("Downloading model... (this may take a minute)")
+        try:
+            subprocess.run(["curl", "-L", "-o", model_path, model_url], check=True)
+            st.success("Model downloaded!")
+        except Exception as e:
+            st.error(f"Download failed: {e}")
+            st.stop()
+
+    # Load model
     try:
-        # Try modern Keras 3 approach
-        os.environ['TF_USE_LEGACY_KERAS'] = '0'   # Use new Keras
-        
-        model = tf.keras.models.load_model(
-            model_path,
-            compile=False,
-            safe_mode=False
-        )
+        os.environ['TF_USE_LEGACY_KERAS'] = '1'
+        model = tf.keras.models.load_model(model_path, compile=False)
         
         with open(os.path.join(current_dir, "tokenizer.pkl"), "rb") as f:
             tokenizer = pickle.load(f)
         with open(os.path.join(current_dir, "max_len.pkl"), "rb") as f:
             max_len = pickle.load(f)
             
-        return model, tokenizer, max_len, "✅ Loaded successfully (Keras 3)"
-        
-    except Exception as e1:
-        st.warning("Trying legacy mode...")
-        try:
-            # Fallback to legacy Keras
-            os.environ['TF_USE_LEGACY_KERAS'] = '1'
-            model = tf.keras.models.load_model(model_path, compile=False)
-            
-            with open(os.path.join(current_dir, "tokenizer.pkl"), "rb") as f:
-                tokenizer = pickle.load(f)
-            with open(os.path.join(current_dir, "max_len.pkl"), "rb") as f:
-                max_len = pickle.load(f)
-                
-            return model, tokenizer, max_len, "✅ Loaded with Legacy Keras"
-        except Exception as e2:
-            st.error(f"Both loading methods failed: {e2}")
-            st.write("Files in folder:", os.listdir(current_dir))
-            st.stop()
+        return model, tokenizer, max_len
+    except Exception as e:
+        st.error(f"Load error: {e}")
+        st.stop()
 
-# Load
-model, tokenizer, max_len, status = load_model_and_files()
-st.success(status)
+model, tokenizer, max_len = download_and_load_model()
+st.success("✅ Model loaded successfully!")
 
 # ====================== UI ======================
 st.markdown('<h1 class="main-header">✨ NextWord AI</h1>', unsafe_allow_html=True)
