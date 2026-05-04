@@ -8,6 +8,8 @@
 A deep learning–powered Next Word Prediction app built with an **LSTM model** and a sleek **Streamlit** frontend. Type a seed sentence, get top-N word predictions, click to build sentences interactively, or let the model auto-complete for you.
 
 ---
+<img width="1918" height="882" alt="Screenshot 2026-05-04 111508" src="https://github.com/user-attachments/assets/09a02c6a-33e1-499e-905c-7ca12b16132a" />
+
 
 ## ✨ Features
 
@@ -150,7 +152,7 @@ This project is licensed under the [MIT License](LICENSE).
   Built with 🔮 by Yugal &nbsp;·&nbsp; LSTM + Streamlit &nbsp;·&nbsp; Nagpur, India
 </p>
 
-<img width="1918" height="882" alt="Screenshot 2026-05-04 111508" src="https://github.com/user-attachments/assets/09a02c6a-33e1-499e-905c-7ca12b16132a" />
+
 
 
 
