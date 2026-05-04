@@ -8,7 +8,15 @@
 A deep learning–powered Next Word Prediction app built with an **LSTM model** and a sleek **Streamlit** frontend. Type a seed sentence, get top-N word predictions, click to build sentences interactively, or let the model auto-complete for you.
 
 ---
-<img width="1918" height="882" alt="Screenshot 2026-05-04 111508" src="https://github.com/user-attachments/assets/09a02c6a-33e1-499e-905c-7ca12b16132a" />
+
+<img width="1898" height="862" alt="Screenshot 2026-05-04 162446" src="https://github.com/user-attachments/assets/7b1e29b2-e072-49e1-a009-8540b8811881" />
+
+<img width="1899" height="856" alt="Screenshot 2026-05-04 162520" src="https://github.com/user-attachments/assets/730c0516-201e-4ac7-9e55-30fbfcae18a6" />
+
+<img width="1862" height="843" alt="Screenshot 2026-05-04 162626" src="https://github.com/user-attachments/assets/74f1ab15-3565-4a76-9c27-921de6dc0fc8" />
+
+
+
 
 
 ## ✨ Features
