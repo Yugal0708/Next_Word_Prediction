@@ -5,166 +5,101 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import os
 
-# ====================== PAGE CONFIG ======================
-st.set_page_config(
-    page_title="NextWord AI",
-    page_icon="✨",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="NextWord AI", page_icon="✨", layout="wide")
 
-# ====================== CUSTOM CSS ======================
+# Custom CSS
 st.markdown("""
-    <style>
-    .main-header {
-        font-size: 3rem;
-        font-weight: 700;
-        background: linear-gradient(90deg, #667eea, #764ba2);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0.5rem;
-    }
-    .sub-header { 
-        text-align: center; 
-        color: #666; 
-        font-size: 1.2rem; 
-        margin-bottom: 2rem; 
-    }
-    .word-chip {
-        display: inline-block;
-        background: linear-gradient(45deg, #667eea, #764ba2);
-        color: white;
-        padding: 10px 20px;
-        margin: 6px;
-        border-radius: 25px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    .word-chip:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-    }
-    </style>
+<style>
+.main-header {font-size: 3rem; font-weight: 700; background: linear-gradient(90deg, #667eea, #764ba2);
+-webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center;}
+.word-chip {display: inline-block; background: linear-gradient(45deg, #667eea, #764ba2); color: white;
+padding: 10px 20px; margin: 6px; border-radius: 25px; font-weight: 600; cursor: pointer;}
+</style>
 """, unsafe_allow_html=True)
 
-# ====================== LOAD MODEL & FILES ======================
+# ====================== LOAD MODEL ======================
 @st.cache_resource
 def load_model_and_files():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    model_path = os.path.join(current_dir, "lstm_model (1).h5")
-    tokenizer_path = os.path.join(current_dir, "tokenizer.pkl")
-    maxlen_path = os.path.join(current_dir, "max_len.pkl")
+    model_path = os.path.join(current_dir, "lstm_model.h5")
     
     try:
-        
-        os.environ['TF_USE_LEGACY_KERAS'] = '1'
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-        
-        st.info("Loading model...")
+        # Try modern Keras 3 approach
+        os.environ['TF_USE_LEGACY_KERAS'] = '0'   # Use new Keras
         
         model = tf.keras.models.load_model(
-            model_path, 
+            model_path,
             compile=False,
             safe_mode=False
         )
         
-        with open(tokenizer_path, "rb") as f:
+        with open(os.path.join(current_dir, "tokenizer.pkl"), "rb") as f:
             tokenizer = pickle.load(f)
-        
-        with open(maxlen_path, "rb") as f:
+        with open(os.path.join(current_dir, "max_len.pkl"), "rb") as f:
             max_len = pickle.load(f)
+            
+        return model, tokenizer, max_len, "✅ Loaded successfully (Keras 3)"
         
-        return model, tokenizer, max_len, "✅ Model loaded successfully!"
-        
-    except Exception as e:
-        st.error(f"❌ Error loading model: {e}")
-        st.write("📁 Files found in directory:")
-        st.write(os.listdir(current_dir))
-        st.stop()
+    except Exception as e1:
+        st.warning("Trying legacy mode...")
+        try:
+            # Fallback to legacy Keras
+            os.environ['TF_USE_LEGACY_KERAS'] = '1'
+            model = tf.keras.models.load_model(model_path, compile=False)
+            
+            with open(os.path.join(current_dir, "tokenizer.pkl"), "rb") as f:
+                tokenizer = pickle.load(f)
+            with open(os.path.join(current_dir, "max_len.pkl"), "rb") as f:
+                max_len = pickle.load(f)
+                
+            return model, tokenizer, max_len, "✅ Loaded with Legacy Keras"
+        except Exception as e2:
+            st.error(f"Both loading methods failed: {e2}")
+            st.write("Files in folder:", os.listdir(current_dir))
+            st.stop()
 
-# Load model
+# Load
 model, tokenizer, max_len, status = load_model_and_files()
 st.success(status)
 
-# ====================== SIDEBAR ======================
-with st.sidebar:
-    st.header("📊 Model Info")
-    st.write("**Vocabulary Size:**", len(tokenizer.word_index))
-    st.write("**Max Sequence Length:**", max_len)
-    st.divider()
-    st.caption("LSTM Next Word Predictor")
-
-# ====================== MAIN UI ======================
+# ====================== UI ======================
 st.markdown('<h1 class="main-header">✨ NextWord AI</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Intelligent LSTM-powered next word prediction</p>', unsafe_allow_html=True)
 
-col1, col2 = st.columns([3, 1])
+with st.sidebar:
+    st.write("**Vocab Size:**", len(tokenizer.word_index))
+    st.write("**Max Length:**", max_len)
 
+input_text = st.text_area("Type here...", placeholder="The weather today is", height=120)
+
+col1, col2 = st.columns(2)
 with col1:
-    input_text = st.text_area(
-        "Type something...",
-        placeholder="The future of artificial intelligence is",
-        height=150,
-        help="Write a few words"
-    )
-
+    num_pred = st.slider("Suggestions", 3, 8, 5)
 with col2:
-    st.markdown("### ⚙️ Settings")
-    num_predictions = st.slider("Number of suggestions", 3, 10, 5)
-    temperature = st.slider("Creativity (Temperature)", 0.1, 1.5, 0.7, 0.1)
-    
-    predict_button = st.button("🔮 Predict Next Words", type="primary", use_container_width=True)
+    temp = st.slider("Temperature", 0.1, 1.5, 0.8, 0.1)
 
-# PREDICTION 
-if predict_button and input_text.strip():
-    with st.spinner("Predicting next words..."):
-        try:
-            # Preprocess
+if st.button("🔮 Predict", type="primary"):
+    if input_text.strip():
+        with st.spinner("Predicting..."):
             sequence = tokenizer.texts_to_sequences([input_text])[0]
             padded = pad_sequences([sequence], maxlen=max_len, padding='pre')
             
-            # Predict
             pred = model.predict(padded, verbose=0)[0]
+            pred = np.log(pred + 1e-8) / temp
+            pred = np.exp(pred) / np.sum(pred)
             
-            # Temperature sampling
-            pred = np.log(pred + 1e-8) / temperature
-            exp_pred = np.exp(pred)
-            pred = exp_pred / np.sum(exp_pred)
+            top_idx = np.argsort(pred)[-num_pred:][::-1]
+            preds = [(tokenizer.index_word.get(i, "?"), float(pred[i])) for i in top_idx if i != 0]
             
-            # Get top words
-            top_indices = np.argsort(pred)[-num_predictions:][::-1]
-            predictions = [(tokenizer.index_word.get(i, "<UNK>"), float(pred[i])) 
-                         for i in top_indices if i != 0]
-            
-            st.session_state.predictions = predictions
-            st.session_state.input_text = input_text
-            
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
+            st.session_state.preds = preds
+            st.session_state.text = input_text
 
-# Display Predictions
-if 'predictions' in st.session_state:
-    st.markdown("### 🎯 Top Predictions")
-    
-    for word, prob in st.session_state.predictions:
-        prob_percent = prob * 100
-        full_sentence = f"{st.session_state.input_text} {word}"
-        
+if 'preds' in st.session_state:
+    st.subheader("Top Predictions")
+    for word, prob in st.session_state.preds:
+        full = f"{st.session_state.text} {word}"
         st.markdown(f"""
-        <div style="background:#f8f9fa; padding:1.2rem; border-radius:12px; margin:8px 0; border-left:5px solid #667eea;">
-            <span class="word-chip" onclick="navigator.clipboard.writeText('{full_sentence}')">{word}</span>
-            <span style="float:right; margin-top:10px; color:#555; font-size:0.95rem;">
-                {prob_percent:.1f}% 
-            </span>
+        <div style="padding:12px; background:#f0f2f6; border-radius:10px; margin:8px 0;">
+            <span class="word-chip" onclick="navigator.clipboard.writeText('{full}')">{word}</span>
+            <span style="float:right; color:#333;">{prob*100:.1f}%</span>
         </div>
         """, unsafe_allow_html=True)
-
-    st.markdown("### 📝 Full Sentence Examples")
-    for word, _ in st.session_state.predictions[:3]:
-        st.info(f"{st.session_state.input_text} **{word}**...")
-
-st.markdown("---")
-st.markdown("<p style='text-align:center; color:#888;'>NextWord AI • Author By Yugal</p>", unsafe_allow_html=True)
