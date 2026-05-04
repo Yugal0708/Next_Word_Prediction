@@ -1,8 +1,9 @@
 import streamlit as st
 import numpy as np
 import pickle
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+import tf_keras as keras
+from tf_keras.models import load_model
+from tf_keras.preprocessing.sequence import pad_sequences
 
 # ─── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
