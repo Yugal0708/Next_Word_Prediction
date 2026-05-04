@@ -61,24 +61,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ====================== LOAD MODEL & FILES ======================
+import os
+
 @st.cache_resource
 def load_model_and_files():
-    model = tf.keras.models.load_model("lstm_model(1).h5")
+    # Get current directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    with open("tokenizer.pkl", "rb") as f:
-        tokenizer = pickle.load(f)
+    model_path = os.path.join(current_dir, "lstm_model(1).h5")
+    tokenizer_path = os.path.join(current_dir, "tokenizer.pkl")
+    maxlen_path = os.path.join(current_dir, "max_len.pkl")
     
-    with open("max_len.pkl", "rb") as f:
-        max_len = pickle.load(f)
-    
-    return model, tokenizer, max_len
+    try:
+        if not os.path.exists(model_path):
+            st.error(f"Model file not found at: {model_path}")
+            st.write("Files in current directory:")
+            st.write(os.listdir(current_dir))
+            st.stop()
+        
+        model = tf.keras.models.load_model(model_path)
+        
+        with open(tokenizer_path, "rb") as f:
+            tokenizer = pickle.load(f)
+        
+        with open(maxlen_path, "rb") as f:
+            max_len = pickle.load(f)
+        
+        st.success("✅ Model and files loaded successfully!")
+        return model, tokenizer, max_len
+        
+    except Exception as e:
+        st.error(f"Error loading files: {e}")
 
-try:
-    model, tokenizer, max_len = load_model_and_files()
-    st.success("✅ Model loaded successfully!")
-except Exception as e:
-    st.error(f"Error loading model/files: {e}")
-    st.stop()
 
 # ====================== UI ======================
 st.markdown('<h1 class="main-header">✨ NextWord AI</h1>', unsafe_allow_html=True)
