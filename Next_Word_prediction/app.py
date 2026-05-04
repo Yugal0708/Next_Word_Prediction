@@ -4,6 +4,7 @@ import pickle
 import tf_keras as keras
 from tf_keras.models import load_model
 from tf_keras.preprocessing.sequence import pad_sequences
+import os
 
 # ─── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -236,13 +237,15 @@ st.markdown("""
 
 
 # ─── Load Model & Artifacts ────────────────────────────────────────────────────
+import os
+
 @st.cache_resource
 def load_artifacts():
-    model     = load_model("lstm_model.h5")
-    tokenizer = pickle.load(open("tokenizer.pkl", "rb"))
-    max_len   = pickle.load(open("max_len.pkl", "rb"))
+    base = os.path.dirname(os.path.abspath(__file__))
+    model     = load_model(os.path.join(base, "lstm_model.h5"))
+    tokenizer = pickle.load(open(os.path.join(base, "tokenizer.pkl"), "rb"))
+    max_len   = pickle.load(open(os.path.join(base, "max_len.pkl"),   "rb"))
     return model, tokenizer, max_len
-
 try:
     model, tokenizer, max_len = load_artifacts()
     model_loaded = True
