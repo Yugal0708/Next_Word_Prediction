@@ -1,15 +1,16 @@
 import streamlit as st
+import streamlit as st
 import pickle
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-import os
 
+# ====================== CONFIG ======================
 st.set_page_config(
     page_title="NextWord AI",
     page_icon="✨",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
+
 )
 
 # Custom CSS 
