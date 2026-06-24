@@ -5,7 +5,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
 [![License](https://img.shields.io/badge/License-MIT-7c3aed?style=for-the-badge)](LICENSE)
 
-A deep learning–powered Next Word Prediction app built with an **LSTM model** and a sleek **Streamlit** frontend. Type a seed sentence, get top-N word predictions, click to build sentences interactively, or let the model auto-complete for you
+A deep learning–powered Next Word Prediction app built with an **LSTM model** and a sleek **Streamlit** frontend. Type a seed sentence, get top-N word predictions, click to build sentences interactively, or let the model auto-complete for you...
 
 ---
 
